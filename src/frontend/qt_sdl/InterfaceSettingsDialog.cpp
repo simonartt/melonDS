@@ -17,6 +17,7 @@
 */
 
 #include <QStyleFactory>
+#include <QKeyEvent>
 #include "InterfaceSettingsDialog.h"
 #include "ui_InterfaceSettingsDialog.h"
 
@@ -24,6 +25,8 @@
 #include "Platform.h"
 #include "Config.h"
 #include "main.h"
+#include "Language.h"
+#include "Window.h"
 
 InterfaceSettingsDialog* InterfaceSettingsDialog::currentDlg = nullptr;
 InterfaceSettingsDialog::InterfaceSettingsDialog(QWidget* parent) : QDialog(parent), ui(new Ui::InterfaceSettingsDialog)
@@ -34,6 +37,25 @@ InterfaceSettingsDialog::InterfaceSettingsDialog(QWidget* parent) : QDialog(pare
     emuInstance = ((MainWindow*)parent)->getEmuInstance();
 
     auto& cfg = emuInstance->getGlobalConfig();
+
+    // Language setting
+    ui->cbxLanguage->addItem("English", "");
+    ui->cbxLanguage->addItem("简体中文", "zh-CN");
+
+    QString cfgLang = cfg.GetQString("Language");
+    if (cfgLang == "zh-CN")
+        ui->cbxLanguage->setCurrentIndex(1);
+
+    // Boss key setting
+    int bossKeyCode = cfg.GetInt("BossKey");
+    if (bossKeyCode > 0)
+    {
+        ui->pbBossKey->setText(QKeySequence(bossKeyCode).toString());
+    }
+    else
+    {
+        ui->pbBossKey->setText("None");
+    }
 
     ui->cbMouseHide->setChecked(cfg.GetBool("Mouse.Hide"));
     ui->spinMouseHideSeconds->setEnabled(ui->cbMouseHide->isChecked());
@@ -63,9 +85,48 @@ InterfaceSettingsDialog::~InterfaceSettingsDialog()
     delete ui;
 }
 
+void InterfaceSettingsDialog::keyPressEvent(QKeyEvent* event)
+{
+    if (waitingForBossKey)
+    {
+        int key = event->key();
+        // Ignore modifier-only keys
+        if (key != Qt::Key_Shift && key != Qt::Key_Control && key != Qt::Key_Alt && key != Qt::Key_Meta)
+        {
+            int modifiers = event->modifiers() & (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
+            int combined = key | modifiers;
+            ui->pbBossKey->setText(QKeySequence(combined).toString());
+            waitingForBossKey = false;
+        }
+        return;
+    }
+
+    QDialog::keyPressEvent(event);
+}
+
 void InterfaceSettingsDialog::on_cbMouseHide_clicked()
 {
     ui->spinMouseHideSeconds->setEnabled(ui->cbMouseHide->isChecked());
+}
+
+void InterfaceSettingsDialog::on_pbBossKey_clicked()
+{
+    if (waitingForBossKey)
+    {
+        // Cancel - reset to previous value
+        waitingForBossKey = false;
+        auto& cfg = emuInstance->getGlobalConfig();
+        int bossKeyCode = cfg.GetInt("BossKey");
+        if (bossKeyCode > 0)
+            ui->pbBossKey->setText(QKeySequence(bossKeyCode).toString());
+        else
+            ui->pbBossKey->setText("None");
+    }
+    else
+    {
+        waitingForBossKey = true;
+        ui->pbBossKey->setText("Press a key...");
+    }
 }
 
 void InterfaceSettingsDialog::on_pbClean_clicked()
@@ -116,6 +177,24 @@ void InterfaceSettingsDialog::done(int r)
     {
         auto& cfg = emuInstance->getGlobalConfig();
 
+        // Language
+        QString lang = ui->cbxLanguage->currentData().toString();
+        cfg.SetQString("Language", lang);
+        Language::isChinese = (lang == "zh-CN");
+
+        // Boss key
+        QString bossText = ui->pbBossKey->text();
+        if (bossText == "None" || bossText == "Press a key...")
+        {
+            cfg.SetInt("BossKey", 0);
+        }
+        else
+        {
+            QKeySequence seq = QKeySequence::fromString(bossText);
+            if (!seq.isEmpty())
+                cfg.SetInt("BossKey", seq[0].toCombined());
+        }
+
         cfg.SetBool("Mouse.Hide", ui->cbMouseHide->isChecked());
         cfg.SetInt("Mouse.HideSeconds", ui->spinMouseHideSeconds->value());
         cfg.SetBool("PauseLostFocus", ui->cbPauseLostFocus->isChecked());
@@ -147,6 +226,5 @@ void InterfaceSettingsDialog::done(int r)
     }
 
     QDialog::done(r);
-
     closeDlg();
 }

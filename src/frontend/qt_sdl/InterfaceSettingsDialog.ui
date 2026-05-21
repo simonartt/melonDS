@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>389</width>
-    <height>356</height>
+    <width>400</width>
+    <height>430</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -19,10 +19,66 @@
   <property name="windowTitle">
    <string>Interface settings - melonDS</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0,0">
+  <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0,0,0,0">
    <property name="sizeConstraint">
     <enum>QLayout::SizeConstraint::SetFixedSize</enum>
    </property>
+   <item>
+    <widget class="QGroupBox" name="groupBox_Language">
+     <property name="title">
+      <string>Language</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_Language">
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_Language">
+        <item>
+         <widget class="QLabel" name="label_Language">
+          <property name="text">
+           <string>Language</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="cbxLanguage"/>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_BossKey">
+     <property name="title">
+      <string>Boss Key</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_BossKey">
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_BossKey">
+        <item>
+         <widget class="QLabel" name="label_BossKey">
+          <property name="text">
+           <string>Boss key (press to hide/show window)</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pbBossKey">
+          <property name="minimumSize">
+           <size>
+            <width>80</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>Press a key</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
    <item>
     <widget class="QGroupBox" name="groupBox">
      <property name="title">

@@ -20,6 +20,7 @@
 #define INTERFACESETTINGSDIALOG_H
 
 #include <QDialog>
+#include <QKeyEvent>
 
 namespace Ui { class InterfaceSettingsDialog; }
 class InterfaceSettingsDialog;
@@ -55,10 +56,15 @@ public:
 signals:
     void updateInterfaceSettings();
 
+protected:
+    void keyPressEvent(QKeyEvent* event) override;
+
 private slots:
     void done(int r);
 
     void on_cbMouseHide_clicked();
+
+    void on_pbBossKey_clicked();
 
     void on_pbClean_clicked();
     void on_pbAccurate_clicked();
@@ -74,6 +80,8 @@ private:
     Ui::InterfaceSettingsDialog* ui;
 
     EmuInstance* emuInstance;
+
+    bool waitingForBossKey = false;
 };
 
 #endif // INTERFACESETTINGSDIALOG_H

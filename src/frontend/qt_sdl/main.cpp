@@ -53,6 +53,7 @@
 #include "version.h"
 
 #include "Config.h"
+#include "Language.h"
 
 #include "EmuInstance.h"
 #include "ArchiveUtil.h"
@@ -356,6 +357,13 @@ int main(int argc, char** argv)
         QMessageBox::critical(nullptr,
                               "melonDS",
                               "Unable to write to config.\nPlease check the write permissions of the folder you placed melonDS in.");
+
+    // Initialize language from config
+    {
+        Config::Table cfg = Config::GetGlobalTable();
+        QString lang = cfg.GetQString("Language");
+        Language::isChinese = (lang == "zh-CN");
+    }
 
     camStarted[0] = false;
     camStarted[1] = false;
