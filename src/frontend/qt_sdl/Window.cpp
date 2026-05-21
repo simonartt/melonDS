@@ -552,12 +552,12 @@ MainWindow::MainWindow(int id, EmuInstance* inst, QWidget* parent) :
                 QMenu * submenu = menu->addMenu(LTr("Screen sizing"));
                 grpScreenSizing = new QActionGroup(submenu);
 
-                const char *screensizing[] = {"Even", "Emphasize top", "Emphasize bottom", "Auto", LTr("Top only"),
-                                              LTr("Bottom only")};
+                const char *screensizing[] = {"Even", "Emphasize top", "Emphasize bottom", "Auto", "Top only",
+                                              "Bottom only"};
 
                 for (int i = 0; i < screenSizing_MAX; i++)
                 {
-                    actScreenSizing[i] = submenu->addAction(QString(screensizing[i]));
+                    actScreenSizing[i] = submenu->addAction(LTr(screensizing[i]));
                     actScreenSizing[i]->setActionGroup(grpScreenSizing);
                     actScreenSizing[i]->setData(QVariant(i));
                     actScreenSizing[i]->setCheckable(true);
