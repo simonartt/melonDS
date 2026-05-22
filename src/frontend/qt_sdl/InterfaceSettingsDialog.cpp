@@ -78,6 +78,38 @@ InterfaceSettingsDialog::InterfaceSettingsDialog(QWidget* parent) : QDialog(pare
         if (!cfgTheme.isEmpty() && themeKeys[i].compare(currentTheme, Qt::CaseInsensitive) == 0)
             ui->cbxUITheme->setCurrentIndex(i + 1);
     }
+
+    // Translate all UI labels using LTr()
+    setWindowTitle(LTr("Interface settings - melonDS"));
+    ui->groupBox_Language->setTitle(LTr("Language"));
+    ui->label_Language->setText(LTr("Language"));
+    ui->groupBox_BossKey->setTitle(LTr("Boss Key"));
+    ui->label_BossKey->setText(LTr("Boss key (press to hide/show window)"));
+    ui->pbBossKey->setText(LTr("Press a key"));
+    ui->groupBox->setTitle(LTr("User interface"));
+    ui->label_4->setText(LTr("Theme"));
+    ui->cbMouseHide->setText(LTr("Hide mouse after inactivity"));
+    ui->label->setText(LTr("After"));
+    ui->label_2->setText(LTr("seconds"));
+    ui->cbPauseLostFocus->setText(LTr("Pause emulation when window is not in focus"));
+    ui->cbMuteFastForward->setText(LTr("Mute audio while fast forwarding"));
+    ui->groupBox_2->setTitle(LTr("Framerate"));
+    ui->label_5->setText(LTr("Target FPS"));
+    ui->label_3->setText(LTr("Fast-Forward"));
+    ui->label_6->setText(LTr("Slow-Mo"));
+    ui->pbAccurate->setText(LTr("Accurate"));
+    ui->pbClean->setText(LTr("Clean"));
+    ui->pb2x->setText(LTr("2x"));
+    ui->pb3x->setText(LTr("3x"));
+    ui->pbMAX->setText(LTr("MAX"));
+    ui->pbQuarter->setText(LTr("1/4"));
+    ui->pbHalf->setText(LTr("1/2"));
+
+    // Re-set boss key text from config (overrides the LTr above if a key is set)
+    if (bossKeyCode > 0)
+    {
+        ui->pbBossKey->setText(QKeySequence(bossKeyCode).toString());
+    }
 }
 
 InterfaceSettingsDialog::~InterfaceSettingsDialog()

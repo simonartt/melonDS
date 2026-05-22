@@ -109,6 +109,31 @@ static void InitTranslations()
     zhCN["Limit framerate"] = "限制帧率";
     zhCN["Audio sync"] = "音频同步";
 
+    // Interface Settings dialog labels
+    zhCN["Interface settings - melonDS"] = "界面设置 - melonDS";
+    zhCN["Language"] = "语言";
+    zhCN["Boss Key"] = "老板键";
+    zhCN["Boss key (press to hide/show window)"] = "老板键（按此隐藏/显示窗口）";
+    zhCN["Press a key"] = "按一个键";
+    zhCN["User interface"] = "用户界面";
+    zhCN["Theme"] = "主题";
+    zhCN["Hide mouse after inactivity"] = "闲置后隐藏鼠标";
+    zhCN["After"] = "之后";
+    zhCN["seconds"] = "秒";
+    zhCN["Pause emulation when window is not in focus"] = "窗口失去焦点时暂停模拟";
+    zhCN["Mute audio while fast forwarding"] = "快进时静音";
+    zhCN["Framerate"] = "帧率";
+    zhCN["Target FPS"] = "目标帧率";
+    zhCN["Fast-Forward"] = "快进";
+    zhCN["Slow-Mo"] = "慢放";
+    zhCN["Accurate"] = "精确";
+    zhCN["Clean"] = "标准";
+    zhCN["2x"] = "2x";
+    zhCN["3x"] = "3x";
+    zhCN["MAX"] = "最大";
+    zhCN["1/4"] = "1/4";
+    zhCN["1/2"] = "1/2";
+
     // Help
     zhCN["About..."] = "关于...";
 
