@@ -69,6 +69,8 @@ jobs:
 
     env:
       VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg_cache,readwrite
+      # macos-26 runner toolchain warns about implicit __yield decl in Qt 6 headers; demote to warning
+      VCPKG_CMAKE_CONFIGURE_OPTIONS: -DCMAKE_CXX_FLAGS=-Wno-error=implicit-function-declaration
 
     steps:
       - name: Check out sources
@@ -277,7 +279,8 @@ jobs:
   release:
     name: Publish release
     needs: [windows, macos, macos-universal, ubuntu, bsd]
-    if: github.ref == 'refs/heads/master' && !cancelled()
+    # Publish whatever succeeded; a single failed platform must not block the release.
+    if: github.ref == 'refs/heads/master' && !cancelled() && contains(needs.*.result, 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
