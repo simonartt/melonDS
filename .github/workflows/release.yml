@@ -65,12 +65,11 @@ jobs:
         arch: [x86_64, arm64]
 
     name: macOS ${{ matrix.arch }}
-    runs-on: macos-26
+    # macos-14 (Xcode 15) like upstream: macos-26's newer Clang rejects Qt's implicit __yield decl in qyieldcpu.h
+    runs-on: macos-14
 
     env:
       VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg_cache,readwrite
-      # macos-26 runner toolchain warns about implicit __yield decl in Qt 6 headers; demote to warning
-      VCPKG_CMAKE_CONFIGURE_OPTIONS: -DCMAKE_CXX_FLAGS=-Wno-error=implicit-function-declaration
 
     steps:
       - name: Check out sources
@@ -116,7 +115,7 @@ jobs:
   macos-universal:
     name: macOS Universal
     needs: [macos]
-    runs-on: macos-26
+    runs-on: macos-14
     continue-on-error: true
     steps:
       - name: Download x86_64
