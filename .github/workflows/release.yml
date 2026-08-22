@@ -1,0 +1,338 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+      - ci/*
+  workflow_dispatch:
+
+env:
+  MELONDS_GIT_BRANCH: ${{ github.ref }}
+  MELONDS_GIT_HASH: ${{ github.sha }}
+  MELONDS_BUILD_PROVIDER: GitHub Actions
+
+jobs:
+  # ---------------- Windows ----------------
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - name: x86_64
+            image: windows-2025-vs2026
+          - name: arm64
+            image: windows-11-arm
+
+    name: Windows ${{ matrix.arch.name }}
+    runs-on: ${{ matrix.arch.image }}
+    env:
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg_cache,readwrite
+    steps:
+    - name: Check out sources
+      uses: actions/checkout@v6
+    - name: Restore vcpkg cache
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ github.workspace }}/vcpkg_cache
+        key: vcpkg-${{ matrix.arch.name }}-windows-${{ hashFiles('vcpkg.json') }}
+        restore-keys: vcpkg-${{ matrix.arch.name }}-windows-
+    - name: Set up vcpkg
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgJsonGlob: vcpkg.json
+    - name: Build
+      uses: lukka/run-cmake@v10
+      with:
+        configurePreset: release-windows-${{ matrix.arch.name }}
+        configurePresetAdditionalArgs: "['-DENABLE_DEBUG_DEPS=OFF', '-DMELONDS_EMBED_BUILD_INFO=ON']"
+        buildPreset: release-windows-${{ matrix.arch.name }}
+    - uses: actions/upload-artifact@v7
+      with:
+        name: melonDS-windows-${{ matrix.arch.name }}
+        path: .\build\release-windows-${{ matrix.arch.name }}\melonDS.exe
+    - name: Save vcpkg cache
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ github.workspace }}/vcpkg_cache
+        key: vcpkg-${{ matrix.arch.name }}-windows-${{ hashFiles('vcpkg.json') }}
+
+  # ---------------- macOS ----------------
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+
+    name: macOS ${{ matrix.arch }}
+    runs-on: macos-26
+
+    env:
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg_cache,readwrite
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v6
+      - name: Install dependencies for package building
+        run: |
+          brew install autoconf automake autoconf-archive libtool python-setuptools
+      - name: Set up CMake
+        uses: lukka/get-cmake@latest
+      - name: Restore vcpkg cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg_cache
+          key: vcpkg-${{ matrix.arch }}-osx-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-${{ matrix.arch }}-osx-
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgJsonGlob: vcpkg.json
+      - name: Build
+        uses: lukka/run-cmake@v10
+        with:
+          configurePreset: release-mac-${{ matrix.arch }}
+          buildPreset: release-mac-${{ matrix.arch }}
+          configurePresetAdditionalArgs: "['-DMELONDS_EMBED_BUILD_INFO=ON']"
+      - name: Compress app bundle
+        shell: bash
+        run: |
+          cd build/release-mac-${{ matrix.arch }}
+          zip -r -y ../../macOS-${{ matrix.arch }}.zip melonDS.app
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: macOS-${{ matrix.arch }}
+          path: macOS-${{ matrix.arch }}.zip
+          archive: false
+      - name: Save vcpkg cache
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg_cache
+          key: vcpkg-${{ matrix.arch }}-osx-${{ hashFiles('vcpkg.json') }}
+
+  macos-universal:
+    name: macOS Universal
+    needs: [macos]
+    runs-on: macos-26
+    continue-on-error: true
+    steps:
+      - name: Download x86_64
+        uses: actions/download-artifact@v8
+        with:
+          name: macOS-x86_64.zip
+          path: x86_64
+          skip-decompress: true
+      - name: Download arm64
+        uses: actions/download-artifact@v8
+        with:
+          name: macOS-arm64.zip
+          path: arm64
+          skip-decompress: true
+      - name: Combine app bundles
+        shell: bash
+        run: |
+          unzip x86_64/*.zip -d x86_64
+          unzip arm64/*.zip -d arm64
+          lipo {x86_64,arm64}/melonDS.app/Contents/MacOS/melonDS -create -output melonDS
+          cp -a arm64/melonDS.app melonDS.app
+          cp melonDS melonDS.app/Contents/MacOS/melonDS
+          codesign -s - --deep melonDS.app
+          zip -r -y macOS-universal.zip melonDS.app
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: macOS-universal
+          path: macOS-universal.zip
+          archive: false
+
+  # ---------------- Linux (AppImage) ----------------
+  ubuntu:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - runner: ubuntu-22.04
+            name: x86_64
+          - runner: ubuntu-22.04-arm
+            name: aarch64
+
+    name: Linux ${{ matrix.arch.name }}
+    runs-on: ${{ matrix.arch.runner }}
+
+    steps:
+    - uses: actions/checkout@v6
+      name: Check out sources
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install --allow-downgrades cmake ninja-build extra-cmake-modules libpcap0.8-dev libsdl2-dev libenet-dev \
+          qt6-{base,base-private,multimedia}-dev qt6-wayland libqt6svg6-dev libarchive-dev libzstd-dev libfuse2 libfaad-dev
+    - name: Configure
+      run: cmake -B build -G Ninja -DCMAKE_INSTALL_PREFIX=/usr -DMELONDS_EMBED_BUILD_INFO=ON
+    - name: Build
+      run: |
+        cmake --build build
+        DESTDIR=AppDir cmake --install build
+    - name: Fetch AppImage tools
+      run: |
+        wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${{ matrix.arch.name }}.AppImage
+        wget https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-${{ matrix.arch.name }}.AppImage
+        chmod a+x linuxdeploy-*.AppImage
+    - name: Build the AppImage
+      env:
+        EXTRA_PLATFORM_PLUGINS: libqwayland-egl.so;libqwayland-generic.so
+        EXTRA_QT_PLUGINS: waylandcompositor
+        QMAKE: /usr/lib/qt6/bin/qmake
+      run: |
+        ./linuxdeploy-${{ matrix.arch.name }}.AppImage --appdir AppDir --plugin qt --output appimage
+        mv melonDS*.AppImage melonDS-Linux-${{ matrix.arch.name }}.AppImage
+    - uses: actions/upload-artifact@v7
+      with:
+        name: melonDS-linux-${{ matrix.arch.name }}
+        path: melonDS-Linux-${{ matrix.arch.name }}.AppImage
+        archive: false
+
+  # ---------------- BSD ----------------
+  bsd:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [freebsd, netbsd, openbsd]
+        arch: [x86_64]
+        include:
+          - os: freebsd
+            os_name: FreeBSD
+            install_deps: >
+              pkg install -y cmake kf6-extra-cmake-modules pkgconf ninja
+              qt6-base qt6-multimedia qt6-svg sdl2 libarchive zstd enet
+              faad2
+
+          - os: netbsd
+            os_name: NetBSD
+            prepare_vm: |
+              /usr/sbin/pkg_add pkgin curl
+              mach=$(uname -m | sed "s/evbarm/evbarm-$(uname -p)/")
+              for set in xbase xcomp; do
+                curl -sL ${PKG_PATH%%/pkgsrc*}/NetBSD/NetBSD-$(uname -r
+                  )/$mach/binary/sets/$set.tar.xz | tar xJpf - -C /
+              done
+            install_deps: >
+              pkgin -y install cmake extra-cmake-modules pkgconf
+              ninja-build qt6-qtbase qt6-qtmultimedia qt6-qtsvg SDL2
+              libarchive zstd enet faad2
+
+          - os: openbsd
+            os_name: OpenBSD
+            install_deps: >
+              pkg_add -v cmake kf6-extra-cmake-modules pkgconf ninja
+              qt6-base qt6-multimedia qt6-svg sdl2 libarchive zstd enet
+              faad
+
+
+    name: ${{ matrix.os_name }} / ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: ${{ matrix.os }} {0}
+
+    steps:
+    - uses: actions/checkout@v6
+      name: Check out sources
+
+    - name: Start ${{ matrix.os_name }} VM
+      uses: jenseng/dynamic-uses@v1
+      with:
+        uses: vmactions/${{ matrix.os }}-vm@v1
+        with: >
+          {
+            "arch": ${{ matrix.arch }},
+            "envs": "MELONDS_GIT_BRANCH MELONDS_GIT_HASH
+                     MELONDS_BUILD_PROVIDER",
+            "prepare": ${{ toJSON(matrix.prepare_vm) }},
+            "sync": "nfs",
+            "usesh": "true",
+          }
+
+    - name: Install dependencies
+      run: ${{ matrix.install_deps }}
+
+    - name: Configure
+      run: >
+        cmake -S $GITHUB_WORKSPACE -B /tmp/build -G Ninja
+        -DMELONDS_EMBED_BUILD_INFO=ON
+
+    - name: Build
+      run: |
+        cmake --build /tmp/build
+        cp -RP /tmp/build $GITHUB_WORKSPACE/
+
+    - name: Upload binary
+      uses: actions/upload-artifact@v7
+      with:
+        name: melonDS-${{ matrix.os }}-${{ matrix.arch }}
+        path: build/melonDS
+
+  # ---------------- Publish release ----------------
+  release:
+    name: Publish release
+    needs: [windows, macos, macos-universal, ubuntu, bsd]
+    if: github.ref == 'refs/heads/master' && !cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Normalize asset names
+        run: |
+          mkdir -p out
+          for d in dist/*/; do
+            [ -d "$d" ] || continue
+            name=$(basename "$d")
+            case "$name" in
+              melonDS-windows-x86_64)  target="melonDS-Windows-x86_64.exe" ;;
+              melonDS-windows-arm64)   target="melonDS-Windows-arm64.exe" ;;
+              macOS-x86_64)            target="melonDS-macOS-x86_64.zip" ;;
+              macOS-arm64)             target="melonDS-macOS-arm64.zip" ;;
+              macOS-universal)         target="melonDS-macOS-universal.zip" ;;
+              melonDS-linux-x86_64)    target="melonDS-Linux-x86_64.AppImage" ;;
+              melonDS-linux-aarch64)   target="melonDS-Linux-aarch64.AppImage" ;;
+              melonDS-freebsd-x86_64)  target="melonDS-FreeBSD-x86_64" ;;
+              melonDS-netbsd-x86_64)   target="melonDS-NetBSD-x86_64" ;;
+              melonDS-openbsd-x86_64)  target="melonDS-OpenBSD-x86_64" ;;
+              *)                       target="$name" ;;
+            esac
+            for f in "$d"*; do
+              [ -f "$f" ] || continue
+              cp "$f" "out/$target"
+            done
+          done
+          ls -la out/
+          if [ -z "$(ls -A out)" ]; then
+            echo "No artifacts produced, aborting release."
+            exit 1
+          fi
+
+      - name: Generate checksums
+        run: |
+          cd out
+          sha256sum * > SHA256SUMS.txt
+          grep -v SHA256SUMS SHA256SUMS.txt
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: melonDS v1.1 (commit ${{ github.sha }})
+          body: |
+            Auto-built by GitHub Actions from commit `${{ github.sha }}` on ${{ github.event.head_commit.timestamp }}.
+
+            Download the build for your platform below. Verify with `sha256sum -c SHA256SUMS.txt`.
+          files: |
+            out/melonDS-*
+            out/SHA256SUMS.txt
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
