@@ -291,9 +291,13 @@ jobs:
         run: |
           # Download each expected artifact individually; skip any that are missing
           # (platforms whose build failed). A single flaky download must not kill the release.
+          # Note: for single-file artifacts (archive:false) the /zip endpoint returns the
+          # raw stored file itself, not a wrapper zip — detect and handle both cases.
           mkdir -p dist
-          names="melonDS-windows-x86_64 melonDS-windows-arm64 macOS-x86_64.zip macOS-arm64.zip macOS-universal.zip melonDS-Linux-x86_64.AppImage melonDS-Linux-aarch64.AppImage melonDS-freebsd-x86_64 melonDS-netbsd-x86_64 melonDS-openbsd-x86_64"
-          for n in $names; do
+          for n in melonDS-windows-x86_64 melonDS-windows-arm64 \
+                   macOS-x86_64.zip macOS-arm64.zip macOS-universal.zip \
+                   melonDS-Linux-x86_64.AppImage melonDS-Linux-aarch64.AppImage \
+                   melonDS-freebsd-x86_64 melonDS-netbsd-x86_64 melonDS-openbsd-x86_64; do
             id=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
                  "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=$n&per_page=100&run_id=${{ github.run_id }}" \
                  | python3 -c 'import json,sys; a=json.load(sys.stdin).get("artifacts",[]); print(a[0]["id"] if a else "")')
@@ -301,21 +305,20 @@ jobs:
               echo "artifact $n not found, skipping"
               continue
             fi
-            ok=0
-            for attempt in 1 2 3; do
-              if curl -sfL --retry 5 --retry-delay 3 -H "Authorization: Bearer $GITHUB_TOKEN" \
-                   "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$id/zip" \
-                   -o "/tmp/$n.zip"; then
-                ok=1; break
+            mkdir -p "dist/$n"
+            if curl -sfL --retry 3 --retry-delay 5 --max-time 600 \
+                 -H "Authorization: Bearer $GITHUB_TOKEN" \
+                 "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$id/zip" \
+                 -o "/tmp/$n.bin"; then
+              if python3 -c 'import sys,zipfile; sys.exit(0 if zipfile.is_zipfile("/tmp/$n.bin") else 1)'; then
+                python3 -m zipfile -e "/tmp/$n.bin" "dist/$n/"
+              else
+                mv "/tmp/$n.bin" "dist/$n/rawfile"
               fi
-              sleep 5
-            done
-            if [ "$ok" = "1" ] && [ -s "/tmp/$n.zip" ]; then
-              mkdir -p "dist/$n"
-              python3 -m zipfile -e "/tmp/$n.zip" "dist/$n/" || { echo "extract failed for $n"; continue; }
               echo "downloaded $n"
             else
               echo "download failed for $n, skipping"
+              rm -rf "dist/$n"
             fi
           done
 
@@ -326,28 +329,33 @@ jobs:
             [ -d "$d" ] || continue
             name=$(basename "$d")
             case "$name" in
-              melonDS-windows-x86_64)        target="melonDS-Windows-x86_64.exe" ;;
-              melonDS-windows-arm64)         target="melonDS-Windows-arm64.exe" ;;
-              macOS-x86_64.zip)              target="melonDS-macOS-x86_64.zip" ;;
-              macOS-arm64.zip)               target="melonDS-macOS-arm64.zip" ;;
-              macOS-universal.zip)           target="melonDS-macOS-universal.zip" ;;
+              melonDS-windows-x86_64)         target="melonDS-Windows-x86_64.exe" ;;
+              melonDS-windows-arm64)          target="melonDS-Windows-arm64.exe" ;;
+              macOS-x86_64.zip)               target="melonDS-macOS-x86_64.zip" ;;
+              macOS-arm64.zip)                target="melonDS-macOS-arm64.zip" ;;
+              macOS-universal.zip)            target="melonDS-macOS-universal.zip" ;;
               melonDS-Linux-x86_64.AppImage)  target="melonDS-Linux-x86_64.AppImage" ;;
               melonDS-Linux-aarch64.AppImage) target="melonDS-Linux-aarch64.AppImage" ;;
-              melonDS-freebsd-x86_64)        target="melonDS-FreeBSD-x86_64" ;;
-              melonDS-netbsd-x86_64)         target="melonDS-NetBSD-x86_64" ;;
-              melonDS-openbsd-x86_64)        target="melonDS-OpenBSD-x86_64" ;;
-              *)                             target="$name" ;;
+              melonDS-freebsd-x86_64)         target="melonDS-FreeBSD-x86_64" ;;
+              melonDS-netbsd-x86_64)          target="melonDS-NetBSD-x86_64" ;;
+              melonDS-openbsd-x86_64)         target="melonDS-OpenBSD-x86_64" ;;
+              *)                              target="$name" ;;
             esac
-            for f in "$d"*; do
-              [ -f "$f" ] || continue
-              cp "$f" "out/$target"
-            done
+            if [ -d "$d/melonDS.app" ]; then
+              # macOS: repackage the .app bundle into a single zip asset
+              (cd "$d" && zip -r -q "$target" melonDS.app)
+              mv "$d/$target" "out/$target"
+            else
+              f=$(find "$d" -maxdepth 1 -type f | head -1)
+              [ -n "$f" ] && cp "$f" "out/$target"
+            fi
           done
           ls -la out/
           if [ -z "$(ls -A out)" ]; then
             echo "No artifacts produced, aborting release."
             exit 1
           fi
+
 
       - name: Generate checksums
         run: |
