@@ -285,42 +285,77 @@ jobs:
     if: github.ref == 'refs/heads/master' && !cancelled() && contains(needs.*.result, 'success')
     runs-on: ubuntu-latest
     steps:
-      - name: Download all artifacts
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Download each expected artifact individually; skip any that are missing
-          # (platforms whose build failed). A single flaky download must not kill the release.
-          # Note: for single-file artifacts (archive:false) the /zip endpoint returns the
-          # raw stored file itself, not a wrapper zip — detect and handle both cases.
-          mkdir -p dist
-          for n in melonDS-windows-x86_64 melonDS-windows-arm64 \
-                   macOS-x86_64.zip macOS-arm64.zip macOS-universal.zip \
-                   melonDS-Linux-x86_64.AppImage melonDS-Linux-aarch64.AppImage \
-                   melonDS-freebsd-x86_64 melonDS-netbsd-x86_64 melonDS-openbsd-x86_64; do
-            id=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
-                 "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=$n&per_page=100&run_id=${{ github.run_id }}" \
-                 | python3 -c 'import json,sys; a=json.load(sys.stdin).get("artifacts",[]); print(a[0]["id"] if a else "")')
-            if [ -z "$id" ]; then
-              echo "artifact $n not found, skipping"
-              continue
-            fi
-            mkdir -p "dist/$n"
-            if curl -sfL --retry 3 --retry-delay 5 --max-time 600 \
-                 -H "Authorization: Bearer $GITHUB_TOKEN" \
-                 "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$id/zip" \
-                 -o "/tmp/$n.bin"; then
-              if python3 -c 'import sys,zipfile; sys.exit(0 if zipfile.is_zipfile("/tmp/$n.bin") else 1)'; then
-                python3 -m zipfile -e "/tmp/$n.bin" "dist/$n/"
-              else
-                mv "/tmp/$n.bin" "dist/$n/rawfile"
-              fi
-              echo "downloaded $n"
-            else
-              echo "download failed for $n, skipping"
-              rm -rf "dist/$n"
-            fi
-          done
+      # Download each artifact with the official action; continue-on-error so a
+      # missing artifact (failed platform) does not abort the whole publish.
+      - name: Download Windows x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: melonDS-windows-x86_64
+          path: dist/melonDS-windows-x86_64
+        continue-on-error: true
+
+      - name: Download Windows arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: melonDS-windows-arm64
+          path: dist/melonDS-windows-arm64
+        continue-on-error: true
+
+      - name: Download macOS x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: macOS-x86_64.zip
+          path: dist/macOS-x86_64
+        continue-on-error: true
+
+      - name: Download macOS arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: macOS-arm64.zip
+          path: dist/macOS-arm64
+        continue-on-error: true
+
+      - name: Download macOS universal
+        uses: actions/download-artifact@v4
+        with:
+          name: macOS-universal.zip
+          path: dist/macOS-universal
+        continue-on-error: true
+
+      - name: Download Linux x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: melonDS-Linux-x86_64.AppImage
+          path: dist/melonDS-Linux-x86_64
+        continue-on-error: true
+
+      - name: Download Linux aarch64
+        uses: actions/download-artifact@v4
+        with:
+          name: melonDS-Linux-aarch64.AppImage
+          path: dist/melonDS-Linux-aarch64
+        continue-on-error: true
+
+      - name: Download FreeBSD x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: melonDS-freebsd-x86_64
+          path: dist/melonDS-freebsd-x86_64
+        continue-on-error: true
+
+      - name: Download NetBSD x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: melonDS-netbsd-x86_64
+          path: dist/melonDS-netbsd-x86_64
+        continue-on-error: true
+
+      - name: Download OpenBSD x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: melonDS-openbsd-x86_64
+          path: dist/melonDS-openbsd-x86_64
+        continue-on-error: true
 
       - name: Normalize asset names
         run: |
@@ -331,11 +366,11 @@ jobs:
             case "$name" in
               melonDS-windows-x86_64)         target="melonDS-Windows-x86_64.exe" ;;
               melonDS-windows-arm64)          target="melonDS-Windows-arm64.exe" ;;
-              macOS-x86_64.zip)               target="melonDS-macOS-x86_64.zip" ;;
-              macOS-arm64.zip)                target="melonDS-macOS-arm64.zip" ;;
-              macOS-universal.zip)            target="melonDS-macOS-universal.zip" ;;
-              melonDS-Linux-x86_64.AppImage)  target="melonDS-Linux-x86_64.AppImage" ;;
-              melonDS-Linux-aarch64.AppImage) target="melonDS-Linux-aarch64.AppImage" ;;
+              macOS-x86_64)                   target="melonDS-macOS-x86_64.zip" ;;
+              macOS-arm64)                    target="melonDS-macOS-arm64.zip" ;;
+              macOS-universal)                target="melonDS-macOS-universal.zip" ;;
+              melonDS-Linux-x86_64)           target="melonDS-Linux-x86_64.AppImage" ;;
+              melonDS-Linux-aarch64)          target="melonDS-Linux-aarch64.AppImage" ;;
               melonDS-freebsd-x86_64)         target="melonDS-FreeBSD-x86_64" ;;
               melonDS-netbsd-x86_64)          target="melonDS-NetBSD-x86_64" ;;
               melonDS-openbsd-x86_64)         target="melonDS-OpenBSD-x86_64" ;;
@@ -355,7 +390,6 @@ jobs:
             echo "No artifacts produced, aborting release."
             exit 1
           fi
-
 
       - name: Generate checksums
         run: |
