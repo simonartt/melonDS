@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>melonDS 下载 — GitHub Actions 自动构建</title>
+<style>
+  :root {
+    --bg: #333;
+    --panel: #2a2a2a;
+    --accent: #99FF00;
+    --text: #e8e8e8;
+    --muted: #999;
+    --border: #444;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+  .container { max-width: 760px; width: 100%; }
+  .status-bar {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 10px 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    margin-bottom: 28px;
+  }
+  .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  h1 { font-size: 32px; margin-bottom: 6px; }
+  h1 span { color: var(--accent); }
+  .subtitle { color: var(--muted); font-size: 15px; margin-bottom: 24px; }
+  .meta {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 24px;
+    line-height: 1.8;
+    word-break: break-all;
+  }
+  .meta a { color: var(--accent); text-decoration: none; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    transition: border-color 0.15s;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card-info { min-width: 0; }
+  .platform { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .platform .glyph { color: var(--accent); margin-right: 8px; }
+  .size { font-size: 12px; color: var(--muted); }
+  .btn {
+    background: var(--accent);
+    color: #1a1a00;
+    border: none;
+    border-radius: 999px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .btn:hover { filter: brightness(1.1); }
+  .loading, .error {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 40px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 15px;
+  }
+  .error { color: #ff6b6b; }
+  footer { margin-top: 32px; font-size: 12px; color: var(--muted); text-align: center; line-height: 1.8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="status-bar"><div class="dot"></div><span id="status-text">正在获取最新构建…</span></div>
+  <h1><span>melonDS</span> 下载</h1>
+  <p class="subtitle">DS 模拟器 · GitHub Actions 自动编译，每次推送 master 后更新</p>
+  <div id="meta" class="meta" style="display:none"></div>
+  <div id="content"><div class="loading">加载中…</div></div>
+  <footer>
+    构建流程：<a href="https://github.com/simonartt/melonDS/actions" style="color:var(--accent)">GitHub Actions</a> ·
+    源码：<a href="https://github.com/simonartt/melonDS" style="color:var(--accent)">simonartt/melonDS</a><br>
+    校验：下载后执行 <code>sha256sum -c SHA256SUMS.txt</code>
+  </footer>
+</div>
+
+<script>
+const API = "https://api.github.com/repos/simonartt/melonDS/releases/tags/latest";
+const PLATFORM_ORDER = ["Windows", "macOS", "Linux", "FreeBSD", "NetBSD", "OpenBSD"];
+const GLYPHS = { Windows: "\u25A0", macOS: "\u25CF", Linux: "\u25B2", FreeBSD: "\u25C6", NetBSD: "\u25B3", OpenBSD: "\u25C7" };
+
+function fmtSize(bytes) {
+  if (!bytes) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  let i = 0, v = bytes;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return v.toFixed(1) + " " + units[i];
+}
+
+function platformOf(name) {
+  for (const p of PLATFORM_ORDER) if (name.includes(p)) return p;
+  return "Other";
+}
+
+async function load() {
+  const statusEl = document.getElementById("status-text");
+  try {
+    const res = await fetch(API);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const rel = await res.json();
+
+    statusEl.textContent = "最新构建已就绪";
+    const meta = document.getElementById("meta");
+    meta.style.display = "block";
+    const commit = (rel.tag_name || "").slice(0, 7);
+    meta.innerHTML =
+      "版本：" + (rel.name || "latest") + "<br>" +
+      "构建时间：" + new Date(rel.published_at).toLocaleString("zh-CN") + "<br>" +
+      "完整 commit：<a href='https://github.com/simonartt/melonDS/commit/" + rel.html_url.split("/commit/")[1] + "'>" + (rel.html_url || "").split("/commit/")[1] + "</a>";
+
+    const assets = rel.assets.filter(a => !a.name.endsWith("SHA256SUMS.txt"));
+    if (!assets.length) throw new Error("no assets");
+
+    const groups = {};
+    for (const a of assets) {
+      const p = platformOf(a.name);
+      (groups[p] = groups[p] || []).push(a);
+    }
+    const order = PLATFORM_ORDER.filter(p => groups[p]);
+    Object.keys(groups).forEach(p => { if (!order.includes(p)) order.push(p); });
+
+    const content = document.getElementById("content");
+    content.innerHTML = "";
+    const grid = document.createElement("div");
+    grid.className = "cards";
+    for (const p of order) {
+      for (const a of groups[p]) {
+        const card = document.createElement("div");
+        card.className = "card";
+        const info = document.createElement("div");
+        info.className = "card-info";
+        const plat = document.createElement("div");
+        plat.className = "platform";
+        plat.innerHTML = "<span class='glyph'>" + (GLYPHS[p] || "\u25A1") + "</span>" + p;
+        const sz = document.createElement("div");
+        sz.className = "size";
+        sz.textContent = a.name.replace(/^melonDS-/, "").replace(/\.(exe|zip|AppImage)$/, "") + " · " + fmtSize(a.size);
+        info.appendChild(plat);
+        info.appendChild(sz);
+        const btn = document.createElement("a");
+        btn.className = "btn";
+        btn.href = a.browser_download_url;
+        btn.textContent = "下载";
+        card.appendChild(info);
+        card.appendChild(btn);
+        grid.appendChild(card);
+      }
+    }
+    content.appendChild(grid);
+  } catch (e) {
+    statusEl.textContent = "获取失败";
+    document.getElementById("content").innerHTML =
+      "<div class='error'>无法加载最新构建（" + e.message + "）<br><br>" +
+      "可能原因：CI 尚未完成，或该 tag 的 Release 还未发布。<br>" +
+      "<a href='https://github.com/simonartt/melonDS/actions' style='color:var(--accent)'>查看 Actions 状态 →</a></div>";
+  }
+}
+load();
+setInterval(load, 5 * 60 * 1000); // refresh every 5 min while page open
+</script>
+</body>
+</html>
