@@ -12,6 +12,9 @@ env:
   MELONDS_GIT_HASH: ${{ github.sha }}
   MELONDS_BUILD_PROVIDER: GitHub Actions
 
+permissions:
+  contents: write
+
 jobs:
   # ---------------- Windows ----------------
   windows:
@@ -289,7 +292,7 @@ jobs:
           # Download each expected artifact individually; skip any that are missing
           # (platforms whose build failed). A single flaky download must not kill the release.
           mkdir -p dist
-          names="melonDS-windows-x86_64 melonDS-windows-arm64 macOS-x86_64 macOS-arm64 macOS-universal melonDS-linux-x86_64 melonDS-linux-aarch64 melonDS-freebsd-x86_64 melonDS-netbsd-x86_64 melonDS-openbsd-x86_64"
+          names="melonDS-windows-x86_64 melonDS-windows-arm64 macOS-x86_64.zip macOS-arm64.zip macOS-universal.zip melonDS-Linux-x86_64.AppImage melonDS-Linux-aarch64.AppImage melonDS-freebsd-x86_64 melonDS-netbsd-x86_64 melonDS-openbsd-x86_64"
           for n in $names; do
             id=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
                  "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=$n&per_page=100&run_id=${{ github.run_id }}" \
@@ -300,7 +303,7 @@ jobs:
             fi
             ok=0
             for attempt in 1 2 3; do
-              if curl -sL --retry 5 --retry-delay 3 -H "Authorization: Bearer $GITHUB_TOKEN" \
+              if curl -sfL --retry 5 --retry-delay 3 -H "Authorization: Bearer $GITHUB_TOKEN" \
                    "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$id/zip" \
                    -o "/tmp/$n.zip"; then
                 ok=1; break
@@ -323,17 +326,17 @@ jobs:
             [ -d "$d" ] || continue
             name=$(basename "$d")
             case "$name" in
-              melonDS-windows-x86_64)  target="melonDS-Windows-x86_64.exe" ;;
-              melonDS-windows-arm64)   target="melonDS-Windows-arm64.exe" ;;
-              macOS-x86_64)            target="melonDS-macOS-x86_64.zip" ;;
-              macOS-arm64)             target="melonDS-macOS-arm64.zip" ;;
-              macOS-universal)         target="melonDS-macOS-universal.zip" ;;
-              melonDS-linux-x86_64)    target="melonDS-Linux-x86_64.AppImage" ;;
-              melonDS-linux-aarch64)   target="melonDS-Linux-aarch64.AppImage" ;;
-              melonDS-freebsd-x86_64)  target="melonDS-FreeBSD-x86_64" ;;
-              melonDS-netbsd-x86_64)   target="melonDS-NetBSD-x86_64" ;;
-              melonDS-openbsd-x86_64)  target="melonDS-OpenBSD-x86_64" ;;
-              *)                       target="$name" ;;
+              melonDS-windows-x86_64)        target="melonDS-Windows-x86_64.exe" ;;
+              melonDS-windows-arm64)         target="melonDS-Windows-arm64.exe" ;;
+              macOS-x86_64.zip)              target="melonDS-macOS-x86_64.zip" ;;
+              macOS-arm64.zip)               target="melonDS-macOS-arm64.zip" ;;
+              macOS-universal.zip)           target="melonDS-macOS-universal.zip" ;;
+              melonDS-Linux-x86_64.AppImage)  target="melonDS-Linux-x86_64.AppImage" ;;
+              melonDS-Linux-aarch64.AppImage) target="melonDS-Linux-aarch64.AppImage" ;;
+              melonDS-freebsd-x86_64)        target="melonDS-FreeBSD-x86_64" ;;
+              melonDS-netbsd-x86_64)         target="melonDS-NetBSD-x86_64" ;;
+              melonDS-openbsd-x86_64)        target="melonDS-OpenBSD-x86_64" ;;
+              *)                             target="$name" ;;
             esac
             for f in "$d"*; do
               [ -f "$f" ] || continue
